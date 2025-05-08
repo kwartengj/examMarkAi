@@ -1,3 +1,5 @@
+"use client";
+
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { authAPI } from "./api";
 
@@ -53,6 +55,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setLoading(true);
     setError(null);
     try {
+      // For dummy login with test credentials, bypass API call
+      if (email === "test@example.com" && password === "password") {
+        // Create a mock user
+        setUser({
+          _id: "dummy-user-id",
+          username: "Test User",
+          email: "test@example.com",
+          role: "Examiner",
+        });
+        setLoading(false);
+        return;
+      }
+
       const response = await authAPI.login({ email, password });
       if (response.success) {
         setUser(response.user);
