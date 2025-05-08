@@ -2,9 +2,10 @@
 
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { authAPI } from "./api";
+import { supabase } from "../../config/supabase";
 
 interface User {
-  _id: string;
+  id: string;
   username: string;
   email: string;
   role: string;
@@ -32,23 +33,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if user is already logged in
+  // Check if user is already logged in using Supabase session
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        const response = await authAPI.getCurrentUser();
-        if (response.success) {
-          setUser(response.user);
+        // Check if supabase is initialized
+        if (!supabase) {
+          console.error("Supabase client is not initialized");
+          setLoading(false);
+          return;
+        }
+
+        // Get current session from Supabase
+        const { data: sessionData } = await supabase.auth.getSession();
+
+        if (sessionData?.session) {
+          // User is logged in, get user data
+          const response = await authAPI.getCurrentUser();
+          if (response.success) {
+            setUser(response.user);
+          }
         }
       } catch (err) {
-        // User is not logged in, that's okay
-        console.log("User not authenticated");
+        console.log("User not authenticated", err);
       } finally {
         setLoading(false);
       }
     };
 
     checkAuthStatus();
+
+    // Set up auth state change listener only if supabase is initialized
+    let authListener = { subscription: { unsubscribe: () => {} } };
+
+    if (supabase) {
+      authListener = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === "SIGNED_IN" && session) {
+          const response = await authAPI.getCurrentUser();
+          if (response.success) {
+            setUser(response.user);
+          }
+        } else if (event === "SIGNED_OUT") {
+          setUser(null);
+        }
+      });
+    }
+
+    // Clean up subscription
+    return () => {
+      if (authListener?.subscription?.unsubscribe) {
+        authListener.subscription.unsubscribe();
+      }
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -59,10 +95,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       if (email === "test@example.com" && password === "password") {
         // Create a mock user
         setUser({
-          _id: "dummy-user-id",
+          id: "dummy-user-id",
           username: "Test User",
           email: "test@example.com",
-          role: "Examiner",
+          role: "examiner",
         });
         setLoading(false);
         return;
@@ -75,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setError(response.message || "Login failed");
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || "Login failed");
+      setError(err.message || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -92,12 +128,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const response = await authAPI.register({ username, email, password });
       if (response.success) {
         // Auto login after registration
-        await login(email, password);
+        setUser(response.user);
       } else {
         setError(response.message || "Registration failed");
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || "Registration failed");
+      setError(err.message || "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -106,10 +142,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const logout = async () => {
     setLoading(true);
     try {
-      await authAPI.logout();
-      setUser(null);
+      const response = await authAPI.logout();
+      if (response.success) {
+        setUser(null);
+      } else {
+        setError(response.message || "Logout failed");
+      }
     } catch (err: any) {
-      setError(err.response?.data?.message || "Logout failed");
+      setError(err.message || "Logout failed");
     } finally {
       setLoading(false);
     }

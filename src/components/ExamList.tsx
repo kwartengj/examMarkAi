@@ -30,56 +30,77 @@ import { useAuth } from "@/lib/AuthContext";
 import { useNavigate } from "react-router-dom";
 
 interface ExamPaper {
-  _id: string;
+  id: string;
   title: string;
-  date: string;
-  paperCount: number;
+  created_at: string;
+  paper_count?: number;
   status: "pending" | "in-progress" | "completed";
+  subject?: string;
+  grade_level?: string;
+  total_marks?: number;
 }
 
 // Default mock data to use when API fails or during development
 const defaultExams: ExamPaper[] = [
   {
-    _id: "1",
+    id: "1",
     title: "Introduction to Computer Science - Final Exam",
-    date: "2023-06-15",
-    paperCount: 32,
+    created_at: "2023-06-15",
+    paper_count: 32,
     status: "completed",
+    subject: "Computer Science",
+    grade_level: "Undergraduate",
+    total_marks: 100,
   },
   {
-    _id: "2",
+    id: "2",
     title: "Advanced Mathematics - Midterm Assessment",
-    date: "2023-07-22",
-    paperCount: 28,
+    created_at: "2023-07-22",
+    paper_count: 28,
     status: "in-progress",
+    subject: "Mathematics",
+    grade_level: "Undergraduate",
+    total_marks: 80,
   },
   {
-    _id: "3",
+    id: "3",
     title: "Biology 101 - Lab Report Evaluation",
-    date: "2023-08-05",
-    paperCount: 45,
+    created_at: "2023-08-05",
+    paper_count: 45,
     status: "pending",
+    subject: "Biology",
+    grade_level: "Undergraduate",
+    total_marks: 50,
   },
   {
-    _id: "4",
+    id: "4",
     title: "English Literature - Essay Analysis",
-    date: "2023-08-10",
-    paperCount: 22,
+    created_at: "2023-08-10",
+    paper_count: 22,
     status: "pending",
+    subject: "English",
+    grade_level: "Undergraduate",
+    total_marks: 60,
   },
   {
-    _id: "5",
+    id: "5",
     title: "Physics - Quantum Mechanics Final",
-    date: "2023-07-30",
-    paperCount: 18,
+    created_at: "2023-07-30",
+    paper_count: 18,
     status: "in-progress",
+    subject: "Physics",
+    grade_level: "Graduate",
+    total_marks: 100,
   },
   {
-    _id: "6",
+    id: "6",
     title: "History - World War II Research Papers",
-    date: "2023-06-28",
-    paperCount: 36,
+    created_at: "2023-06-28",
+    paper_count: 36,
     status: "completed",
+    subject: "History",
+    grade_level: "Undergraduate",
+    total_marks: 75,
   },
 ];
 
@@ -106,7 +127,18 @@ const ExamList = ({ searchQuery = "" }) => {
         setLoading(true);
         const response = await examsAPI.getAllExams();
         if (response.success) {
-          setExams(response.data);
+          // Map the Supabase data structure to our component's expected structure
+          const formattedExams = response.data.map((exam: any) => ({
+            id: exam.id,
+            title: exam.title,
+            created_at: exam.created_at,
+            paper_count: exam.paper_count || 0,
+            status: exam.status || "pending",
+            subject: exam.subject,
+            grade_level: exam.grade_level,
+            total_marks: exam.total_marks,
+          }));
+          setExams(formattedExams);
         } else {
           console.error("API returned error:", response.message);
           // Fallback to default exams
@@ -140,8 +172,8 @@ const ExamList = ({ searchQuery = "" }) => {
 
   // Sort exams by date
   const sortedExams = [...filteredExams].sort((a, b) => {
-    const dateA = new Date(a.date).getTime();
-    const dateB = new Date(b.date).getTime();
+    const dateA = new Date(a.created_at).getTime();
+    const dateB = new Date(b.created_at).getTime();
     return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
   });
 
@@ -180,14 +212,14 @@ const ExamList = ({ searchQuery = "" }) => {
         const response = await examsAPI.deleteExam(examId);
         if (response.success) {
           // Remove the deleted exam from the state
-          setExams(exams.filter((exam) => exam._id !== examId));
+          setExams(exams.filter((exam) => exam.id !== examId));
         } else {
           setError(response.message || "Failed to delete exam");
         }
       } catch (err: any) {
         console.error("Failed to delete exam:", err);
         // Still remove from UI for better UX
-        setExams(exams.filter((exam) => exam._id !== examId));
+        setExams(exams.filter((exam) => exam.id !== examId));
       }
     }
   };
@@ -274,7 +306,7 @@ const ExamList = ({ searchQuery = "" }) => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {sortedExams.map((exam) => (
-            <Card key={exam._id} className="overflow-hidden">
+            <Card key={exam.id} className="overflow-hidden">
               <CardContent className="p-6">
                 <div className="flex justify-between items-start mb-4">
                   <h3 className="text-lg font-semibold line-clamp-2">
@@ -287,18 +319,14 @@ const ExamList = ({ searchQuery = "" }) => {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => handleViewExam(exam._id)}
-                      >
+                      <DropdownMenuItem onClick={() => handleViewExam(exam.id)}>
                         View Details
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleMarkExam(exam._id)}
-                      >
+                      <DropdownMenuItem onClick={() => handleMarkExam(exam.id)}>
                         Start Marking
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() => handleDeleteExam(exam._id)}
+                        onClick={() => handleDeleteExam(exam.id)}
                       >
                         Delete
                       </DropdownMenuItem>
@@ -306,9 +334,9 @@ const ExamList = ({ searchQuery = "" }) => {
                   </DropdownMenu>
                 </div>
                 <div className="flex items-center text-sm text-gray-500 mb-4">
-                  <span>{new Date(exam.date).toLocaleDateString()}</span>
+                  <span>{new Date(exam.created_at).toLocaleDateString()}</span>
                   <span className="mx-2">•</span>
-                  <span>{exam.paperCount} papers</span>
+                  <span>{exam.paper_count || 0} papers</span>
                 </div>
                 <Badge className={getStatusColor(exam.status)}>
                   {exam.status.charAt(0).toUpperCase() +
@@ -319,11 +347,11 @@ const ExamList = ({ searchQuery = "" }) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleViewExam(exam._id)}
+                  onClick={() => handleViewExam(exam.id)}
                 >
                   View
                 </Button>
-                <Button size="sm" onClick={() => handleMarkExam(exam._id)}>
+                <Button size="sm" onClick={() => handleMarkExam(exam.id)}>
                   Mark
                 </Button>
               </CardFooter>

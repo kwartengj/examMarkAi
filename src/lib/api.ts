@@ -1,6 +1,7 @@
 import axios from "axios";
+import { supabase } from "../../config/supabase";
 
-// Create axios instance with base URL and credentials
+// Create axios instance with base URL and credentials (for fallback)
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
   withCredentials: true,
@@ -9,129 +10,467 @@ const api = axios.create({
   },
 });
 
+// Helper function to format Supabase response
+const formatSupabaseResponse = (data: any, error: any) => {
+  if (error) {
+    console.error("Supabase error:", error);
+    return { success: false, message: error.message, data: null };
+  }
+  return { success: true, data };
+};
+
 // Auth API
 export const authAPI = {
   register: async (userData: any) => {
-    const response = await api.post("/auth/register", userData);
-    return response.data;
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: userData.email,
+        password: userData.password,
+        options: {
+          data: {
+            username: userData.username,
+            role: userData.role || "examiner",
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      // Create user profile in the users table
+      const { error: profileError } = await supabase.from("users").insert([
+        {
+          id: data.user?.id,
+          username: userData.username,
+          email: userData.email,
+          role: userData.role || "examiner",
+          created_at: new Date().toISOString(),
+        },
+      ]);
+
+      if (profileError) throw profileError;
+
+      return {
+        success: true,
+        message: "User registered successfully",
+        user: {
+          id: data.user?.id,
+          username: userData.username,
+          email: userData.email,
+          role: userData.role || "examiner",
+        },
+      };
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      return { success: false, message: error.message };
+    }
   },
+
   login: async (credentials: any) => {
-    const response = await api.post("/auth/login", credentials);
-    return response.data;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: credentials.email,
+        password: credentials.password,
+      });
+
+      if (error) throw error;
+
+      // Get user profile from users table
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", data.user?.id)
+        .single();
+
+      if (userError) throw userError;
+
+      return {
+        success: true,
+        message: "Login successful",
+        user: userData,
+      };
+    } catch (error: any) {
+      console.error("Login error:", error);
+      return { success: false, message: error.message };
+    }
   },
+
   logout: async () => {
-    const response = await api.get("/auth/logout");
-    return response.data;
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      return { success: true, message: "Logout successful" };
+    } catch (error: any) {
+      console.error("Logout error:", error);
+      return { success: false, message: error.message };
+    }
   },
+
   getCurrentUser: async () => {
-    const response = await api.get("/auth/user");
-    return response.data;
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) throw error;
+
+      if (!data.user) {
+        return { success: false, message: "No user found" };
+      }
+
+      // Get user profile from users table
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", data.user.id)
+        .single();
+
+      if (userError) throw userError;
+
+      return { success: true, user: userData };
+    } catch (error: any) {
+      console.error("Get current user error:", error);
+      return { success: false, message: error.message };
+    }
   },
 };
 
 // Exams API
 export const examsAPI = {
   getAllExams: async () => {
-    const response = await api.get("/exams");
-    return response.data;
+    try {
+      const { data, error } = await supabase
+        .from("exams")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      return formatSupabaseResponse(data, error);
+    } catch (error: any) {
+      console.error("Error fetching exams:", error);
+      return { success: false, message: error.message, data: null };
+    }
   },
+
   getExamById: async (id: string) => {
-    const response = await api.get(`/exams/${id}`);
-    return response.data;
+    try {
+      const { data, error } = await supabase
+        .from("exams")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      return formatSupabaseResponse(data, error);
+    } catch (error: any) {
+      console.error(`Error fetching exam ${id}:`, error);
+      return { success: false, message: error.message, data: null };
+    }
   },
+
   createExam: async (examData: any) => {
-    const response = await api.post("/exams", examData);
-    return response.data;
+    try {
+      const { data, error } = await supabase
+        .from("exams")
+        .insert([
+          {
+            title: examData.title,
+            subject: examData.subject,
+            grade_level: examData.gradeLevel,
+            total_marks: examData.totalMarks,
+            created_by: examData.createdBy,
+            created_at: new Date().toISOString(),
+            status: examData.status || "pending",
+          },
+        ])
+        .select();
+
+      return formatSupabaseResponse(data?.[0], error);
+    } catch (error: any) {
+      console.error("Error creating exam:", error);
+      return { success: false, message: error.message, data: null };
+    }
   },
+
   uploadExam: async (formData: FormData) => {
-    const response = await api.post("/exams/upload", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
-    return response.data;
+    // For file uploads, we'll need to use Supabase Storage
+    try {
+      const file = formData.get("file") as File;
+      const examData = JSON.parse(formData.get("examData") as string);
+
+      // Upload file to Supabase Storage
+      const fileName = `${Date.now()}-${file.name}`;
+      const { data: fileData, error: fileError } = await supabase.storage
+        .from("exam-papers")
+        .upload(fileName, file);
+
+      if (fileError) throw fileError;
+
+      // Create exam record with file URL
+      const fileUrl = supabase.storage
+        .from("exam-papers")
+        .getPublicUrl(fileName).data.publicUrl;
+
+      const { data, error } = await supabase
+        .from("exams")
+        .insert([
+          {
+            ...examData,
+            file_url: fileUrl,
+            created_at: new Date().toISOString(),
+            status: "pending",
+          },
+        ])
+        .select();
+
+      return formatSupabaseResponse(data?.[0], error);
+    } catch (error: any) {
+      console.error("Error uploading exam:", error);
+      return { success: false, message: error.message, data: null };
+    }
   },
+
   updateExam: async (id: string, examData: any) => {
-    const response = await api.put(`/exams/${id}`, examData);
-    return response.data;
+    try {
+      const { data, error } = await supabase
+        .from("exams")
+        .update(examData)
+        .eq("id", id)
+        .select();
+
+      return formatSupabaseResponse(data?.[0], error);
+    } catch (error: any) {
+      console.error(`Error updating exam ${id}:`, error);
+      return { success: false, message: error.message, data: null };
+    }
   },
+
   deleteExam: async (id: string) => {
-    const response = await api.delete(`/exams/${id}`);
-    return response.data;
+    try {
+      const { error } = await supabase.from("exams").delete().eq("id", id);
+
+      return {
+        success: !error,
+        message: error ? error.message : "Exam deleted successfully",
+      };
+    } catch (error: any) {
+      console.error(`Error deleting exam ${id}:`, error);
+      return { success: false, message: error.message };
+    }
   },
 };
 
 // Questions API
 export const questionsAPI = {
   getQuestionsByExamId: async (examId: string) => {
-    const response = await api.get(`/questions/exam/${examId}`);
-    return response.data;
+    try {
+      const { data, error } = await supabase
+        .from("questions")
+        .select("*")
+        .eq("exam_id", examId)
+        .order("number", { ascending: true });
+
+      return formatSupabaseResponse(data, error);
+    } catch (error: any) {
+      console.error(`Error fetching questions for exam ${examId}:`, error);
+      return { success: false, message: error.message, data: null };
+    }
   },
+
   getQuestionById: async (id: string) => {
-    const response = await api.get(`/questions/${id}`);
-    return response.data;
+    try {
+      const { data, error } = await supabase
+        .from("questions")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      return formatSupabaseResponse(data, error);
+    } catch (error: any) {
+      console.error(`Error fetching question ${id}:`, error);
+      return { success: false, message: error.message, data: null };
+    }
   },
+
   createQuestion: async (questionData: any) => {
-    const response = await api.post("/questions", questionData);
-    return response.data;
+    try {
+      const { data, error } = await supabase
+        .from("questions")
+        .insert([questionData])
+        .select();
+
+      return formatSupabaseResponse(data?.[0], error);
+    } catch (error: any) {
+      console.error("Error creating question:", error);
+      return { success: false, message: error.message, data: null };
+    }
   },
+
   updateQuestion: async (id: string, questionData: any) => {
-    const response = await api.put(`/questions/${id}`, questionData);
-    return response.data;
+    try {
+      const { data, error } = await supabase
+        .from("questions")
+        .update(questionData)
+        .eq("id", id)
+        .select();
+
+      return formatSupabaseResponse(data?.[0], error);
+    } catch (error: any) {
+      console.error(`Error updating question ${id}:`, error);
+      return { success: false, message: error.message, data: null };
+    }
   },
+
   deleteQuestion: async (id: string) => {
-    const response = await api.delete(`/questions/${id}`);
-    return response.data;
+    try {
+      const { error } = await supabase.from("questions").delete().eq("id", id);
+
+      return {
+        success: !error,
+        message: error ? error.message : "Question deleted successfully",
+      };
+    } catch (error: any) {
+      console.error(`Error deleting question ${id}:`, error);
+      return { success: false, message: error.message };
+    }
   },
 };
 
 // Student Answers API
 export const studentAnswersAPI = {
   getAnswersByExamAndStudent: async (examId: string, studentId: string) => {
-    const response = await api.get(
-      `/student-answers/exam/${examId}/student/${studentId}`,
-    );
-    return response.data;
+    try {
+      const { data, error } = await supabase
+        .from("student_answers")
+        .select("*, questions(*)")
+        .eq("exam_id", examId)
+        .eq("student_id", studentId);
+
+      return formatSupabaseResponse(data, error);
+    } catch (error: any) {
+      console.error(
+        `Error fetching answers for exam ${examId} and student ${studentId}:`,
+        error,
+      );
+      return { success: false, message: error.message, data: null };
+    }
   },
+
   getAnswerById: async (id: string) => {
-    const response = await api.get(`/student-answers/${id}`);
-    return response.data;
+    try {
+      const { data, error } = await supabase
+        .from("student_answers")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      return formatSupabaseResponse(data, error);
+    } catch (error: any) {
+      console.error(`Error fetching answer ${id}:`, error);
+      return { success: false, message: error.message, data: null };
+    }
   },
+
   createAnswer: async (answerData: any) => {
-    const response = await api.post("/student-answers", answerData);
-    return response.data;
+    try {
+      const { data, error } = await supabase
+        .from("student_answers")
+        .insert([answerData])
+        .select();
+
+      return formatSupabaseResponse(data?.[0], error);
+    } catch (error: any) {
+      console.error("Error creating answer:", error);
+      return { success: false, message: error.message, data: null };
+    }
   },
+
   updateAnswer: async (id: string, answerData: any) => {
-    const response = await api.put(`/student-answers/${id}`, answerData);
-    return response.data;
+    try {
+      const { data, error } = await supabase
+        .from("student_answers")
+        .update(answerData)
+        .eq("id", id)
+        .select();
+
+      return formatSupabaseResponse(data?.[0], error);
+    } catch (error: any) {
+      console.error(`Error updating answer ${id}:`, error);
+      return { success: false, message: error.message, data: null };
+    }
   },
 };
 
 // Analytics API
 export const analyticsAPI = {
   getExamAnalytics: async (examId: string) => {
-    const response = await api.get(`/analytics/exam/${examId}`);
-    return response.data;
+    try {
+      // For analytics, we might need to perform more complex queries
+      // This is a simplified example
+      const { data: answers, error: answersError } = await supabase
+        .from("student_answers")
+        .select("*")
+        .eq("exam_id", examId);
+
+      if (answersError) throw answersError;
+
+      // Process the data to generate analytics
+      // This would typically involve more complex calculations
+      const analytics = {
+        totalAnswers: answers.length,
+        averageScore:
+          answers.reduce(
+            (sum, answer) => sum + (answer.examiner_score || 0),
+            0,
+          ) / answers.length,
+        // Add more analytics as needed
+      };
+
+      return { success: true, data: analytics };
+    } catch (error: any) {
+      console.error(`Error fetching analytics for exam ${examId}:`, error);
+      return { success: false, message: error.message, data: null };
+    }
   },
+
   refreshExamAnalytics: async (examId: string) => {
-    const response = await api.post(`/analytics/exam/${examId}/refresh`);
-    return response.data;
+    // This would typically involve recalculating analytics
+    return analyticsAPI.getExamAnalytics(examId);
   },
+
   getDashboardAnalytics: async () => {
-    const response = await api.get("/analytics/dashboard");
-    return response.data;
+    try {
+      // Fetch data needed for dashboard analytics
+      const { data: exams, error: examsError } = await supabase
+        .from("exams")
+        .select("*");
+
+      if (examsError) throw examsError;
+
+      const { data: answers, error: answersError } = await supabase
+        .from("student_answers")
+        .select("*");
+
+      if (answersError) throw answersError;
+
+      // Process the data to generate dashboard analytics
+      const analytics = {
+        totalExams: exams.length,
+        completedExams: exams.filter((exam) => exam.status === "completed")
+          .length,
+        pendingExams: exams.filter((exam) => exam.status === "pending").length,
+        // Add more analytics as needed
+      };
+
+      return { success: true, data: analytics };
+    } catch (error: any) {
+      console.error("Error fetching dashboard analytics:", error);
+      return { success: false, message: error.message, data: null };
+    }
   },
 };
 
-// Error handling interceptor
+// Error handling interceptor for axios (fallback)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     // Handle session expiration
     if (error.response && error.response.status === 401) {
-      // Redirect to login or dispatch logout action
       console.error("Session expired or unauthorized");
-      // You might want to redirect to login page or dispatch a logout action here
     }
     return Promise.reject(error);
   },
