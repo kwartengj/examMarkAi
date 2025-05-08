@@ -83,39 +83,74 @@ export const authAPI = {
 
   login: async (credentials: any) => {
     try {
+      console.log("Attempting login with:", credentials.email);
+
+      if (!supabase) {
+        console.error("Supabase client is not initialized");
+        return {
+          success: false,
+          message: "Authentication service unavailable",
+        };
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email: credentials.email,
         password: credentials.password,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase auth error:", error);
+        throw error;
+      }
+
+      if (!data.user) {
+        console.error("No user returned from auth");
+        return { success: false, message: "Authentication failed" };
+      }
+
+      console.log("Auth successful, fetching user profile");
 
       // Get user profile from users table
       const { data: userData, error: userError } = await supabase
         .from("users")
         .select("*")
-        .eq("id", data.user?.id)
+        .eq("id", data.user.id)
         .single();
 
       // If user exists in auth but not in users table, create a profile
       if (userError && userError.code === "PGRST116") {
+        console.log("User not found in users table, creating profile");
         // Create user profile
         const { data: newUserData, error: createError } = await supabase
           .from("users")
           .insert([
             {
-              id: data.user?.id,
+              id: data.user.id,
               username:
-                data.user?.user_metadata?.username ||
-                data.user?.email?.split("@")[0],
-              email: data.user?.email,
+                data.user.user_metadata?.username ||
+                data.user.email?.split("@")[0] ||
+                "User",
+              email: data.user.email,
               role: "examiner",
               created_at: new Date().toISOString(),
             },
           ])
           .select();
 
-        if (createError) throw createError;
+        if (createError) {
+          console.error("Error creating user profile:", createError);
+          // Even if profile creation fails, return the basic user data
+          return {
+            success: true,
+            message: "Login successful, but profile creation failed",
+            user: {
+              id: data.user.id,
+              username: data.user.email?.split("@")[0] || "User",
+              email: data.user.email,
+              role: "examiner",
+            },
+          };
+        }
 
         return {
           success: true,
@@ -123,9 +158,21 @@ export const authAPI = {
           user: newUserData[0],
         };
       } else if (userError) {
-        throw userError;
+        console.error("Error fetching user profile:", userError);
+        // Return basic user data even if profile fetch fails
+        return {
+          success: true,
+          message: "Login successful, but profile fetch failed",
+          user: {
+            id: data.user.id,
+            username: data.user.email?.split("@")[0] || "User",
+            email: data.user.email,
+            role: "examiner",
+          },
+        };
       }
 
+      console.log("Login successful with user profile");
       return {
         success: true,
         message: "Login successful",
@@ -133,7 +180,7 @@ export const authAPI = {
       };
     } catch (error: any) {
       console.error("Login error:", error);
-      return { success: false, message: error.message };
+      return { success: false, message: error.message || "Login failed" };
     }
   },
 
@@ -178,15 +225,31 @@ export const authAPI = {
 export const examsAPI = {
   getAllExams: async () => {
     try {
+      // Check if supabase is initialized
+      if (!supabase) {
+        console.error("Supabase client is not initialized");
+        return {
+          success: false,
+          message: "Supabase client is not initialized",
+          data: [],
+        };
+      }
+
       const { data, error } = await supabase
         .from("exams")
         .select("*")
         .order("created_at", { ascending: false });
 
-      return formatSupabaseResponse(data, error);
+      if (error) {
+        console.error("Supabase error fetching exams:", error);
+        return { success: false, message: error.message, data: [] };
+      }
+
+      // If no data or empty array, return empty array instead of null
+      return { success: true, data: data || [] };
     } catch (error: any) {
       console.error("Error fetching exams:", error);
-      return { success: false, message: error.message, data: null };
+      return { success: false, message: error.message, data: [] };
     }
   },
 

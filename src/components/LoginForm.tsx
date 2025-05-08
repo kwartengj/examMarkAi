@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -17,15 +17,21 @@ import { Loader2 } from "lucide-react";
 const LoginForm = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { login, loading, error } = useAuth();
+  const { user, login, loading, error } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect if user is already logged in
+  useEffect(() => {
+    if (user) {
+      navigate("/");
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await login(email, password);
-      // Navigate after successful login
-      navigate("/");
+      // Navigation will happen in the useEffect when user state updates
     } catch (err) {
       console.error("Login error:", err);
     }
