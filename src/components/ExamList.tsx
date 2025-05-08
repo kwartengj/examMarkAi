@@ -167,11 +167,11 @@ const ExamList = ({ searchQuery = "" }) => {
   };
 
   const handleViewExam = (examId: string) => {
-    navigate(`/exams/${examId}`);
+    navigate(`/exam-marking/${examId}`);
   };
 
   const handleMarkExam = (examId: string) => {
-    navigate(`/exams/${examId}/mark`);
+    navigate(`/exam-marking/${examId}`);
   };
 
   const handleDeleteExam = async (examId: string) => {

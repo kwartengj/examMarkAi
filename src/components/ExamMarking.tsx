@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { examsAPI, questionsAPI, studentAnswersAPI } from "@/lib/api";
 import {
   Card,
   CardContent,
@@ -39,10 +41,17 @@ interface ExamMarkingProps {
   onComplete?: () => void;
 }
 
-const ExamMarking = ({
-  examId = "1",
-  studentId = "S12345",
-  questions = [
+const ExamMarking = (props: ExamMarkingProps) => {
+  // Get examId from URL params
+  const { examId: urlExamId } = useParams<{ examId: string }>();
+  const navigate = useNavigate();
+
+  // Use props or URL params
+  const examId = props.examId || urlExamId || "1";
+  const studentId = props.studentId || "S12345";
+
+  // Default questions and answers (will be replaced by API data)
+  const defaultQuestions = [
     {
       id: "q1",
       number: 1,
@@ -61,8 +70,9 @@ const ExamMarking = ({
       text: "Compare and contrast mitosis and meiosis.",
       maxScore: 12,
     },
-  ],
-  studentAnswers = [
+  ];
+
+  const defaultAnswers = [
     {
       id: "a1",
       questionId: "q1",
@@ -81,12 +91,84 @@ const ExamMarking = ({
       text: "Mitosis is cell division resulting in two identical daughter cells, while meiosis produces four genetically diverse haploid cells. Mitosis is for growth and repair, meiosis is for sexual reproduction.",
       aiSuggestedScore: 7,
     },
-  ],
-  onSave = () => {},
-  onComplete = () => {},
-}: ExamMarkingProps) => {
+  ];
+
+  // State for questions and answers
+  const [questions, setQuestions] = useState(
+    props.questions || defaultQuestions,
+  );
+  const [studentAnswers, setStudentAnswers] = useState(
+    props.studentAnswers || defaultAnswers,
+  );
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Functions for saving and completing
+  const onSave =
+    props.onSave ||
+    (() => {
+      console.log("Saving exam data...");
+      // In a real app, this would call the API to save the data
+    });
+
+  const onComplete =
+    props.onComplete ||
+    (() => {
+      console.log("Completing exam marking...");
+      navigate("/");
+    });
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<StudentAnswer[]>(studentAnswers);
+
+  // Fetch exam data when examId changes
+  useEffect(() => {
+    const fetchExamData = async () => {
+      if (!examId) return;
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        // In a real app, these would be actual API calls
+        // For now, we'll just simulate API calls with timeouts
+
+        // Fetch exam questions
+        try {
+          const questionsResponse =
+            await questionsAPI.getQuestionsByExamId(examId);
+          if (questionsResponse.success && questionsResponse.data) {
+            setQuestions(questionsResponse.data);
+          }
+        } catch (err) {
+          console.log("Using default questions due to API error");
+          // Keep using default questions
+        }
+
+        // Fetch student answers
+        try {
+          const answersResponse =
+            await studentAnswersAPI.getAnswersByExamAndStudent(
+              examId,
+              studentId,
+            );
+          if (answersResponse.success && answersResponse.data) {
+            setStudentAnswers(answersResponse.data);
+            setAnswers(answersResponse.data);
+          }
+        } catch (err) {
+          console.log("Using default answers due to API error");
+          // Keep using default answers
+        }
+      } catch (err: any) {
+        setError("Failed to load exam data. Please try again.");
+        console.error("Error fetching exam data:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchExamData();
+  }, [examId, studentId]);
   const [activeTab, setActiveTab] = useState("question");
 
   const currentQuestion = questions[currentQuestionIndex];

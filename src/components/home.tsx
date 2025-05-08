@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -11,20 +11,41 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Search, Upload, BarChart3, Bell, Settings, User } from "lucide-react";
+import {
+  Search,
+  Upload,
+  BarChart3,
+  Bell,
+  Settings,
+  User,
+  LogOut,
+} from "lucide-react";
 import ExamList from "./ExamList";
 import AnalyticsDashboard from "./AnalyticsDashboard";
+import { useAuth } from "@/lib/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const Home = () => {
   const [activeTab, setActiveTab] = useState("exams");
   const [searchQuery, setSearchQuery] = useState("");
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
-  // Mock user data
-  const user = {
-    name: "Sarah Johnson",
-    email: "sarah.johnson@university.edu",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
-    role: "Senior Examiner",
+  // Fallback user data if auth user doesn't have all fields
+  const displayUser = {
+    name: user?.username || "User",
+    email: user?.email || "user@example.com",
+    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.username || "User"}`,
+    role: user?.role || "Examiner",
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/login");
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
   };
 
   return (
@@ -89,21 +110,34 @@ const Home = () => {
           </Button>
         </nav>
 
-        <div className="mt-auto pt-4">
+        <div className="mt-auto pt-4 space-y-4">
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center space-x-4">
                 <Avatar>
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                  <AvatarImage
+                    src={displayUser.avatar}
+                    alt={displayUser.name}
+                  />
+                  <AvatarFallback>{displayUser.name.charAt(0)}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="text-sm font-medium">{user.name}</p>
-                  <p className="text-xs text-muted-foreground">{user.role}</p>
+                  <p className="text-sm font-medium">{displayUser.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {displayUser.role}
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
+          <Button
+            variant="outline"
+            className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50"
+            onClick={handleLogout}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
+          </Button>
         </div>
       </div>
 
