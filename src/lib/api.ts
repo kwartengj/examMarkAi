@@ -1,5 +1,5 @@
 import axios from "axios";
-import { supabase } from "../../config/supabase";
+import { supabase } from "../lib/supabaseClient";
 
 // Create axios instance with base URL and credentials (for fallback)
 const api = axios.create({

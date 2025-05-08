@@ -2,7 +2,7 @@
 
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { authAPI } from "./api";
-import { supabase } from "../../config/supabase";
+import { supabase } from "../lib/supabaseClient";
 
 interface User {
   id: string;

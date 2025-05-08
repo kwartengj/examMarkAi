@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import passport from "passport";
 import session from "express-session";
 import { connectDB } from "./config/database.js";
+import { connectSupabase, isSupabaseConfigured } from "./config/supabase.js";
 import examRoutes from "./routes/examRoutes.js";
 import questionRoutes from "./routes/questionRoutes.js";
 import studentAnswerRoutes from "./routes/studentAnswerRoutes.js";
@@ -18,8 +19,40 @@ dotenv.config();
 // Initialize express app
 const app = express();
 
-// Connect to MongoDB
+// Connect to MongoDB (legacy connection)
 connectDB();
+
+// Connect to Supabase and initialize schema if needed
+if (isSupabaseConfigured()) {
+  connectSupabase()
+    .then((connected) => {
+      if (connected) {
+        console.log("Supabase connected and schema initialized successfully");
+      } else {
+        console.error("Failed to connect to Supabase or initialize schema");
+      }
+    })
+    .catch((error) => {
+      console.error("Error connecting to Supabase:", error);
+    });
+} else {
+  console.warn("Supabase not configured. Skipping connection.");
+}
+
+// Initialize Supabase in browser context
+if (typeof window !== "undefined") {
+  connectSupabase()
+    .then((connected) => {
+      if (connected) {
+        console.log("Supabase connected in browser context");
+      } else {
+        console.error("Failed to connect to Supabase in browser context");
+      }
+    })
+    .catch((error) => {
+      console.error("Error connecting to Supabase in browser context:", error);
+    });
+}
 
 // Middleware
 app.use(cors());
@@ -49,6 +82,18 @@ app.use("/api/questions", questionRoutes);
 app.use("/api/student-answers", studentAnswerRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/auth", authRoutes);
+
+// Health check endpoint
+app.get("/api/health", async (req, res) => {
+  const health = {
+    uptime: process.uptime(),
+    timestamp: Date.now(),
+    mongodb:
+      mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    supabase: isSupabaseConfigured() ? "configured" : "not configured",
+  };
+  res.status(200).json(health);
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
