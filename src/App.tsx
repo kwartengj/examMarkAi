@@ -6,9 +6,9 @@ import { AuthProvider } from "./lib/AuthContext";
 import { useAuth } from "./lib/AuthContext";
 
 // Lazy load components for better performance
-const Login = lazy(() => import("./components/Login"));
-const Register = lazy(() => import("./components/Register"));
-const ExamMarking = lazy(() => import("./components/ExamMarking"));
+const Login = lazy(() => import("./components/Login.tsx"));
+const Register = lazy(() => import("./components/Register.tsx"));
+const ExamMarking = lazy(() => import("./components/ExamMarking.tsx"));
 
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {

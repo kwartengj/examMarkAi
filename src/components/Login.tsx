@@ -28,7 +28,7 @@ const Login = () => {
     // Simulate login delay
     setTimeout(() => {
       login("test@example.com", "password");
-      navigate("/dashboard");
+      navigate("/");
       setIsSubmitting(false);
     }, 1000);
   };
@@ -39,7 +39,7 @@ const Login = () => {
 
     try {
       await login(email, password);
-      navigate("/dashboard"); // Redirect to dashboard after successful login
+      navigate("/"); // Redirect to home after successful login
     } catch (err) {
       // Error is handled by AuthContext
     } finally {
