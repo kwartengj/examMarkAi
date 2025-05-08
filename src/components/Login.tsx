@@ -22,13 +22,24 @@ const Login = () => {
   const { login, error } = useAuth();
   const navigate = useNavigate();
 
+  // Function to handle dummy login for testing
+  const handleDummyLogin = () => {
+    setIsSubmitting(true);
+    // Simulate login delay
+    setTimeout(() => {
+      login("test@example.com", "password");
+      navigate("/dashboard");
+      setIsSubmitting(false);
+    }, 1000);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
       await login(email, password);
-      navigate("/"); // Redirect to home page after successful login
+      navigate("/dashboard"); // Redirect to dashboard after successful login
     } catch (err) {
       // Error is handled by AuthContext
     } finally {
@@ -102,6 +113,15 @@ const Login = () => {
               </div>
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting ? "Logging in..." : "Login"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full mt-2"
+                onClick={handleDummyLogin}
+                disabled={isSubmitting}
+              >
+                Test Login (Dummy)
               </Button>
             </div>
           </form>

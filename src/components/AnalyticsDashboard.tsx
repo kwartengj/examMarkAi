@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -14,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import {
   BarChart,
   LineChart,
@@ -22,6 +24,7 @@ import {
   Users,
   Brain,
   AlertTriangle,
+  FileText,
 } from "lucide-react";
 
 interface AnalyticsDashboardProps {
@@ -34,6 +37,7 @@ interface AnalyticsDashboardProps {
     commonMistakes: Array<{ mistake: string; frequency: number }>;
     aiConfidence: Array<{ level: string; percentage: number }>;
     markingTrends: Array<{ date: string; accuracy: number; papers: number }>;
+    pendingExamIds?: string[];
   };
 }
 
@@ -64,8 +68,14 @@ const AnalyticsDashboard = ({
       { date: "May", accuracy: 94, papers: 20 },
       { date: "Jun", accuracy: 94.2, papers: 20 },
     ],
+    pendingExamIds: ["exam1", "exam2", "exam3"],
   },
 }: AnalyticsDashboardProps) => {
+  const navigate = useNavigate();
+
+  const handleMarkExam = (examId: string) => {
+    navigate(`/exam-marking/${examId}`);
+  };
   return (
     <div className="bg-background p-6 w-full">
       <div className="flex justify-between items-center mb-6">
@@ -175,6 +185,34 @@ const AnalyticsDashboard = ({
               <div className="flex items-center text-emerald-500">
                 <span className="font-medium">-3.8% from last period</span>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Pending Exams</p>
+                <h3 className="text-2xl font-bold mt-1">
+                  {examData.pendingExams}
+                </h3>
+              </div>
+              <div className="p-2 bg-primary/10 rounded-full">
+                <FileText className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+            <div className="mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() =>
+                  handleMarkExam(examData.pendingExamIds?.[0] || "exam1")
+                }
+              >
+                Mark Next Exam
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -362,6 +400,14 @@ const AnalyticsDashboard = ({
                         42% of students struggle with correctly applying
                         mathematical formulas
                       </p>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="p-0 h-auto text-xs mt-1"
+                        onClick={() => handleMarkExam("exam2")}
+                      >
+                        View related exams
+                      </Button>
                     </div>
                   </div>
                   <div className="flex items-start gap-4 p-3 bg-muted/20 rounded-lg">
@@ -374,6 +420,14 @@ const AnalyticsDashboard = ({
                         38% of students miss identifying key concepts in their
                         responses
                       </p>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="p-0 h-auto text-xs mt-1"
+                        onClick={() => handleMarkExam("exam3")}
+                      >
+                        View related exams
+                      </Button>
                     </div>
                   </div>
                   <div className="flex items-start gap-4 p-3 bg-muted/20 rounded-lg">
