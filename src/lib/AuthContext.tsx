@@ -115,12 +115,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       const response = await authAPI.login({ email, password });
-      if (response.success) {
+      console.log("Login response:", response);
+
+      if (response.success && response.user) {
         setUser(response.user);
       } else {
         setError(response.message || "Login failed");
       }
     } catch (err: any) {
+      console.error("Login error in AuthContext:", err);
       setError(err.message || "Login failed");
     } finally {
       setLoading(false);

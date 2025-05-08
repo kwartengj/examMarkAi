@@ -36,10 +36,18 @@ export const authAPI = {
 
       if (error) throw error;
 
+      // Check if user was created successfully
+      if (!data.user) {
+        return {
+          success: false,
+          message: "Registration failed - no user created",
+        };
+      }
+
       // Create user profile in the users table
       const { error: profileError } = await supabase.from("users").insert([
         {
-          id: data.user?.id,
+          id: data.user.id,
           username: userData.username,
           email: userData.email,
           role: userData.role || "examiner",
@@ -47,13 +55,21 @@ export const authAPI = {
         },
       ]);
 
-      if (profileError) throw profileError;
+      // Even if there's a profile error, the user is still registered in Auth
+      if (profileError) {
+        console.warn(
+          "User created in Auth but profile creation failed:",
+          profileError,
+        );
+      }
 
       return {
         success: true,
-        message: "User registered successfully",
+        message: data.session
+          ? "User registered and logged in successfully"
+          : "User registered successfully. Please check your email to confirm registration.",
         user: {
-          id: data.user?.id,
+          id: data.user.id,
           username: userData.username,
           email: userData.email,
           role: userData.role || "examiner",
@@ -81,7 +97,34 @@ export const authAPI = {
         .eq("id", data.user?.id)
         .single();
 
-      if (userError) throw userError;
+      // If user exists in auth but not in users table, create a profile
+      if (userError && userError.code === "PGRST116") {
+        // Create user profile
+        const { data: newUserData, error: createError } = await supabase
+          .from("users")
+          .insert([
+            {
+              id: data.user?.id,
+              username:
+                data.user?.user_metadata?.username ||
+                data.user?.email?.split("@")[0],
+              email: data.user?.email,
+              role: "examiner",
+              created_at: new Date().toISOString(),
+            },
+          ])
+          .select();
+
+        if (createError) throw createError;
+
+        return {
+          success: true,
+          message: "Login successful",
+          user: newUserData[0],
+        };
+      } else if (userError) {
+        throw userError;
+      }
 
       return {
         success: true,
