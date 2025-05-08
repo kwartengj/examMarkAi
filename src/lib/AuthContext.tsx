@@ -37,6 +37,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
+        // For development purposes, set a default user
+        setUser({
+          id: "dummy-user-id",
+          username: "Test User",
+          email: "test@example.com",
+          role: "examiner",
+        });
+
         // Check if supabase is initialized
         if (!supabase) {
           console.error("Supabase client is not initialized");
@@ -56,6 +64,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       } catch (err) {
         console.log("User not authenticated", err);
+        // Still set loading to false even if there's an error
+        setLoading(false);
       } finally {
         setLoading(false);
       }
