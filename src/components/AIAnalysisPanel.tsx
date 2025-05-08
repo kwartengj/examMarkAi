@@ -35,8 +35,10 @@ interface AIAnalysisPanelProps {
   maxScore?: number;
   confidenceLevel?: number;
   aiReasoning?: string;
+  criteriaMatched?: string[];
   onAcceptScore?: () => void;
   onOverrideScore?: (score: number, feedback: string) => void;
+  answer?: any; // For compatibility with ExamMarking component
 }
 
 const AIAnalysisPanel = ({
@@ -53,12 +55,28 @@ const AIAnalysisPanel = ({
   maxScore = 5,
   confidenceLevel = 85,
   aiReasoning = "The student correctly identifies the mitochondria's primary function as energy production and mentions cellular respiration and ATP. The explanation of the process is mostly accurate but lacks some detail about the specific stages of cellular respiration (glycolysis, Krebs cycle, electron transport chain).",
+  criteriaMatched = [
+    "Identifies mitochondria as energy producers",
+    "Mentions cellular respiration",
+    "Explains ATP production",
+    "Uses correct scientific terminology",
+  ],
   onAcceptScore = () => {},
   onOverrideScore = () => {},
+  answer = null,
 }: AIAnalysisPanelProps) => {
   const [overrideMode, setOverrideMode] = useState(false);
   const [overrideScore, setOverrideScore] = useState(suggestedScore);
   const [feedback, setFeedback] = useState("");
+
+  // Extract data from answer prop if provided (for compatibility with ExamMarking)
+  if (answer) {
+    studentResponse = answer.text || studentResponse;
+    suggestedScore = answer.aiSuggestedScore || suggestedScore;
+    confidenceLevel = answer.aiConfidenceLevel || confidenceLevel;
+    aiReasoning = answer.aiReasoning || aiReasoning;
+    criteriaMatched = answer.criteriaMatched || criteriaMatched;
+  }
 
   const getConfidenceBadgeVariant = () => {
     if (confidenceLevel >= 80) return "default";
@@ -99,7 +117,7 @@ const AIAnalysisPanel = ({
             {markingCriteria.map((criterion, index) => (
               <li key={index} className="flex items-start gap-2 text-sm">
                 <span className="mt-0.5">
-                  {index < suggestedScore ? (
+                  {criteriaMatched.includes(criterion) ? (
                     <CheckCircle className="h-4 w-4 text-green-500" />
                   ) : (
                     <AlertCircle className="h-4 w-4 text-gray-300" />

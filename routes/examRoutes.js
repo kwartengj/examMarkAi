@@ -2,6 +2,42 @@ import express from "express";
 import Exam from "../models/Exam.js";
 import Question from "../models/Question.js";
 import { isAuthenticated, isOwnerOrAdmin } from "../middleware/auth.js";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(process.cwd(), "uploads");
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: function (req, file, cb) {
+    const filetypes = /pdf|doc|docx|jpg|jpeg|png/;
+    const extname = filetypes.test(
+      path.extname(file.originalname).toLowerCase(),
+    );
+    const mimetype = filetypes.test(file.mimetype);
+    if (extname && mimetype) {
+      return cb(null, true);
+    } else {
+      cb(new Error("Only PDF, Word documents, and images are allowed"));
+    }
+  },
+});
 
 const router = express.Router();
 
@@ -194,6 +230,84 @@ router.delete(
         message: "Exam deleted successfully",
       });
     } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/**
+ * @route   POST /api/exams/upload
+ * @desc    Upload an exam file with marking criteria
+ * @access  Private
+ */
+router.post(
+  "/upload",
+  isAuthenticated,
+  upload.single("file"),
+  async (req, res, next) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "No file uploaded",
+        });
+      }
+
+      const { title, markingCriteria } = req.body;
+
+      if (!title) {
+        return res.status(400).json({
+          success: false,
+          message: "Exam title is required",
+        });
+      }
+
+      let parsedCriteria = [];
+      try {
+        parsedCriteria = JSON.parse(markingCriteria || "[]");
+        if (!Array.isArray(parsedCriteria)) {
+          throw new Error("Marking criteria must be an array");
+        }
+      } catch (err) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid marking criteria format",
+        });
+      }
+
+      // Create new exam
+      const exam = new Exam({
+        title,
+        date: Date.now(),
+        status: "pending",
+        createdBy: req.user._id,
+        paperCount: 0,
+        markingCriteria: parsedCriteria,
+        fileUrl: `/uploads/${req.file.filename}`,
+        fileName: req.file.originalname,
+      });
+
+      await exam.save();
+
+      res.status(201).json({
+        success: true,
+        message: "Exam uploaded successfully",
+        data: exam,
+      });
+    } catch (error) {
+      if (req.file) {
+        // Delete the uploaded file if there was an error
+        fs.unlink(req.file.path, (err) => {
+          if (err) console.error("Error deleting file:", err);
+        });
+      }
+
+      if (error.name === "ValidationError") {
+        const messages = Object.values(error.errors).map((err) => err.message);
+        return res
+          .status(400)
+          .json({ success: false, message: messages.join(", ") });
+      }
       next(error);
     }
   },

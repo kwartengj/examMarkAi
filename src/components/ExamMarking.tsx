@@ -13,8 +13,19 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { ChevronLeft, ChevronRight, Save, Check, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Save,
+  Check,
+  X,
+  Loader2,
+} from "lucide-react";
 import AIAnalysisPanel from "./AIAnalysisPanel";
+import aiService, {
+  AIMarkingResponse,
+  AIMarkingRequest,
+} from "@/services/AIService";
 
 interface Question {
   id: string;
@@ -28,6 +39,9 @@ interface StudentAnswer {
   questionId: string;
   text: string;
   aiSuggestedScore: number;
+  aiConfidenceLevel?: number;
+  aiReasoning?: string;
+  criteriaMatched?: string[];
   examinerScore?: number;
   feedback?: string;
 }
@@ -101,6 +115,7 @@ const ExamMarking = (props: ExamMarkingProps) => {
     props.studentAnswers || defaultAnswers,
   );
   const [loading, setLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Functions for saving and completing
@@ -119,6 +134,54 @@ const ExamMarking = (props: ExamMarkingProps) => {
     });
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<StudentAnswer[]>(studentAnswers);
+
+  // Function to fetch AI analysis for a question and answer
+  const fetchAIAnalysis = async (
+    question: Question,
+    answer: StudentAnswer | undefined,
+  ) => {
+    if (!question || !answer) return;
+
+    setAiLoading(true);
+    try {
+      // Extract marking criteria from the question (in a real app, this would come from the database)
+      const markingCriteria = [
+        "Accurate explanation of key concepts",
+        "Use of relevant examples",
+        "Logical structure and coherence",
+        "Correct use of terminology",
+      ];
+
+      const aiRequest: AIMarkingRequest = {
+        questionText: question.text,
+        studentResponse: answer.text,
+        markingCriteria: markingCriteria,
+        maxScore: question.maxScore,
+      };
+
+      const aiResponse = await aiService.getAISuggestedScore(aiRequest);
+
+      // Update the answer with AI analysis
+      const updatedAnswers = answers.map((a) => {
+        if (a.id === answer.id) {
+          return {
+            ...a,
+            aiSuggestedScore: aiResponse.suggestedScore,
+            aiConfidenceLevel: aiResponse.confidenceLevel,
+            aiReasoning: aiResponse.reasoning,
+            criteriaMatched: aiResponse.criteriaMatched,
+          };
+        }
+        return a;
+      });
+
+      setAnswers(updatedAnswers);
+    } catch (err) {
+      console.error("Error fetching AI analysis:", err);
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   // Fetch exam data when examId changes
   useEffect(() => {
@@ -169,6 +232,18 @@ const ExamMarking = (props: ExamMarkingProps) => {
 
     fetchExamData();
   }, [examId, studentId]);
+
+  // Fetch AI analysis for the current question when it changes
+  useEffect(() => {
+    if (questions.length > 0 && answers.length > 0) {
+      const currentQuestion = questions[currentQuestionIndex];
+      const currentAnswer = answers.find(
+        (a) => a.questionId === currentQuestion.id,
+      );
+
+      fetchAIAnalysis(currentQuestion, currentAnswer);
+    }
+  }, [currentQuestionIndex, questions.length > 0 && answers.length > 0]);
   const [activeTab, setActiveTab] = useState("question");
 
   const currentQuestion = questions[currentQuestionIndex];
@@ -185,16 +260,28 @@ const ExamMarking = (props: ExamMarkingProps) => {
   const handlePrevQuestion = () => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(currentQuestionIndex - 1);
+      fetchAIAnalysis(
+        questions[currentQuestionIndex - 1],
+        answers.find(
+          (a) => a.questionId === questions[currentQuestionIndex - 1].id,
+        ),
+      );
     }
   };
 
   const handleNextQuestion = () => {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
+      fetchAIAnalysis(
+        questions[currentQuestionIndex + 1],
+        answers.find(
+          (a) => a.questionId === questions[currentQuestionIndex + 1].id,
+        ),
+      );
     }
   };
 
-  const handleAcceptAIScore = () => {
+  const handleAcceptAIScore = async () => {
     const updatedAnswers = answers.map((answer) => {
       if (answer.id === currentAnswer.id) {
         return { ...answer, examinerScore: answer.aiSuggestedScore };
@@ -203,9 +290,22 @@ const ExamMarking = (props: ExamMarkingProps) => {
     });
     setAnswers(updatedAnswers);
     onSave(updatedAnswers);
+
+    // Submit feedback to AI service for learning
+    try {
+      await aiService.submitExaminerFeedback({
+        questionId: currentQuestion.id,
+        studentResponse: currentAnswer.text,
+        aiSuggestedScore: currentAnswer.aiSuggestedScore,
+        examinerScore: currentAnswer.aiSuggestedScore, // Same as AI score since we accepted it
+        feedback: "Score accepted without changes",
+      });
+    } catch (error) {
+      console.error("Error submitting feedback to AI:", error);
+    }
   };
 
-  const handleOverrideScore = (score: number, feedback: string) => {
+  const handleOverrideScore = async (score: number, feedback: string) => {
     const updatedAnswers = answers.map((answer) => {
       if (answer.id === currentAnswer.id) {
         return { ...answer, examinerScore: score, feedback };
@@ -214,6 +314,19 @@ const ExamMarking = (props: ExamMarkingProps) => {
     });
     setAnswers(updatedAnswers);
     onSave(updatedAnswers);
+
+    // Submit feedback to AI service for learning
+    try {
+      await aiService.submitExaminerFeedback({
+        questionId: currentQuestion.id,
+        studentResponse: currentAnswer.text,
+        aiSuggestedScore: currentAnswer.aiSuggestedScore,
+        examinerScore: score,
+        feedback: feedback,
+      });
+    } catch (error) {
+      console.error("Error submitting feedback to AI:", error);
+    }
   };
 
   const handleSaveAndComplete = () => {
@@ -317,12 +430,28 @@ const ExamMarking = (props: ExamMarkingProps) => {
           </div>
 
           <div>
-            <AIAnalysisPanel
-              answer={currentAnswer}
-              maxScore={currentQuestion.maxScore}
-              onAccept={handleAcceptAIScore}
-              onOverride={handleOverrideScore}
-            />
+            {aiLoading ? (
+              <Card className="w-full max-w-md bg-white border-2 border-gray-100 shadow-md flex items-center justify-center p-8">
+                <div className="text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+                  <p className="text-muted-foreground">
+                    Analyzing student response...
+                  </p>
+                </div>
+              </Card>
+            ) : (
+              <AIAnalysisPanel
+                answer={currentAnswer}
+                questionText={currentQuestion.text}
+                maxScore={currentQuestion.maxScore}
+                suggestedScore={currentAnswer.aiSuggestedScore}
+                confidenceLevel={currentAnswer.aiConfidenceLevel || 0}
+                aiReasoning={currentAnswer.aiReasoning || ""}
+                criteriaMatched={currentAnswer.criteriaMatched || []}
+                onAccept={handleAcceptAIScore}
+                onOverride={handleOverrideScore}
+              />
+            )}
           </div>
         </div>
 

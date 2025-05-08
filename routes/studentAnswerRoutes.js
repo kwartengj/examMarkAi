@@ -98,7 +98,16 @@ router.get("/:id", isAuthenticated, async (req, res, next) => {
  */
 router.post("/", isAuthenticated, async (req, res, next) => {
   try {
-    const { questionId, examId, studentId, text, aiSuggestedScore } = req.body;
+    const {
+      questionId,
+      examId,
+      studentId,
+      text,
+      aiSuggestedScore,
+      aiConfidenceLevel,
+      aiReasoning,
+      criteriaMatched,
+    } = req.body;
 
     // Check if question exists
     const question = await Question.findById(questionId);
@@ -135,6 +144,9 @@ router.post("/", isAuthenticated, async (req, res, next) => {
       studentId,
       text,
       aiSuggestedScore: aiSuggestedScore || 0,
+      aiConfidenceLevel: aiConfidenceLevel || 0,
+      aiReasoning: aiReasoning || "",
+      criteriaMatched: criteriaMatched || [],
     });
 
     await answer.save();
@@ -170,7 +182,13 @@ router.post("/", isAuthenticated, async (req, res, next) => {
  */
 router.put("/:id", isAuthenticated, async (req, res, next) => {
   try {
-    const { examinerScore, feedback } = req.body;
+    const {
+      examinerScore,
+      feedback,
+      aiConfidenceLevel,
+      aiReasoning,
+      criteriaMatched,
+    } = req.body;
 
     const answer = await StudentAnswer.findById(req.params.id);
 
@@ -195,6 +213,10 @@ router.put("/:id", isAuthenticated, async (req, res, next) => {
     // Update answer fields
     if (examinerScore !== undefined) answer.examinerScore = examinerScore;
     if (feedback !== undefined) answer.feedback = feedback;
+    if (aiConfidenceLevel !== undefined)
+      answer.aiConfidenceLevel = aiConfidenceLevel;
+    if (aiReasoning !== undefined) answer.aiReasoning = aiReasoning;
+    if (criteriaMatched !== undefined) answer.criteriaMatched = criteriaMatched;
 
     // Set marking metadata
     answer.markedBy = req.user._id;

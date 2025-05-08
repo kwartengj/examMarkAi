@@ -4,6 +4,23 @@ import Exam from "../models/Exam.js";
 import StudentAnswer from "../models/StudentAnswer.js";
 import { isAuthenticated } from "../middleware/auth.js";
 
+// Import AI service (would be properly implemented in a real app)
+const aiService = {
+  getLearningProgress: async () => {
+    // Simulate AI learning progress data
+    return {
+      initialAccuracy: 85,
+      currentAccuracy: 94.2,
+      improvementPercentage: 10.8,
+      confidenceLevels: {
+        high: 65,
+        medium: 25,
+        low: 10,
+      },
+    };
+  },
+};
+
 const router = express.Router();
 
 /**
@@ -437,5 +454,113 @@ function aggregateDashboardAnalytics(analyticsData, exams) {
     markingTrends,
   };
 }
+
+/**
+ * @route   GET /api/analytics/ai/learning-progress
+ * @desc    Get AI learning progress data
+ * @access  Private
+ */
+router.get("/ai/learning-progress", isAuthenticated, async (req, res, next) => {
+  try {
+    // In a real implementation, this would fetch data from an actual AI service
+    const learningProgress = await aiService.getLearningProgress();
+
+    res.status(200).json({
+      success: true,
+      data: learningProgress,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   GET /api/analytics/ai/confidence/:examId
+ * @desc    Get AI confidence levels for a specific exam
+ * @access  Private
+ */
+router.get(
+  "/ai/confidence/:examId",
+  isAuthenticated,
+  async (req, res, next) => {
+    try {
+      const { examId } = req.params;
+
+      // Check if exam exists and user has permission
+      const exam = await Exam.findById(examId);
+      if (!exam) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Exam not found" });
+      }
+
+      // Check if user has permission to view these analytics
+      if (
+        req.user.role !== "admin" &&
+        exam.createdBy.toString() !== req.user._id.toString()
+      ) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Forbidden: You do not have permission to view these analytics",
+        });
+      }
+
+      // Get all student answers for this exam that have both AI and examiner scores
+      const answers = await StudentAnswer.find({
+        examId,
+        aiSuggestedScore: { $exists: true },
+        examinerScore: { $exists: true },
+      }).populate("questionId");
+
+      // Calculate AI confidence levels
+      const aiConfidence = [
+        { level: "High (90-100%)", percentage: 0 },
+        { level: "Medium (70-89%)", percentage: 0 },
+        { level: "Low (<70%)", percentage: 0 },
+      ];
+
+      if (answers.length > 0) {
+        let highCount = 0,
+          mediumCount = 0,
+          lowCount = 0;
+
+        answers.forEach((answer) => {
+          // Use aiConfidenceLevel if available, otherwise calculate from score difference
+          if (answer.aiConfidenceLevel) {
+            if (answer.aiConfidenceLevel >= 90) highCount++;
+            else if (answer.aiConfidenceLevel >= 70) mediumCount++;
+            else lowCount++;
+          } else {
+            const maxPossibleScore = answer.questionId.maxScore;
+            const scoreDifference = Math.abs(
+              answer.aiSuggestedScore - answer.examinerScore,
+            );
+            const accuracy = 100 - (scoreDifference / maxPossibleScore) * 100;
+
+            if (accuracy >= 90) highCount++;
+            else if (accuracy >= 70) mediumCount++;
+            else lowCount++;
+          }
+        });
+
+        const total = answers.length;
+        aiConfidence[0].percentage = Math.round((highCount / total) * 100);
+        aiConfidence[1].percentage = Math.round((mediumCount / total) * 100);
+        aiConfidence[2].percentage = Math.round((lowCount / total) * 100);
+      }
+
+      res.status(200).json({
+        success: true,
+        data: {
+          aiConfidence,
+          totalAnswers: answers.length,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 export default router;

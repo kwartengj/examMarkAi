@@ -43,6 +43,14 @@ export const examsAPI = {
     const response = await api.post("/exams", examData);
     return response.data;
   },
+  uploadExam: async (formData: FormData) => {
+    const response = await api.post("/exams/upload", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data;
+  },
   updateExam: async (id: string, examData: any) => {
     const response = await api.put(`/exams/${id}`, examData);
     return response.data;

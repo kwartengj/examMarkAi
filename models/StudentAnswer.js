@@ -25,6 +25,20 @@ const StudentAnswerSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  aiConfidenceLevel: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0,
+  },
+  aiReasoning: {
+    type: String,
+    trim: true,
+  },
+  criteriaMatched: {
+    type: [String],
+    default: [],
+  },
   examinerScore: {
     type: Number,
   },

@@ -20,6 +20,7 @@ import {
   User,
   LogOut,
 } from "lucide-react";
+import ExamUploader from "./ExamUploader";
 import ExamList from "./ExamList";
 import AnalyticsDashboard from "./AnalyticsDashboard";
 import { useAuth } from "@/lib/AuthContext";
@@ -200,9 +201,7 @@ const Home = () => {
                     Manage and mark your exam papers
                   </p>
                 </div>
-                <Button>
-                  <Upload className="mr-2 h-4 w-4" /> Upload Exam
-                </Button>
+                <ExamUploader onExamUploaded={() => setSearchQuery("")} />
               </div>
 
               <div className="grid gap-4">

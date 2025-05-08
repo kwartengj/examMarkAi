@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Card,
@@ -26,9 +26,11 @@ import {
   AlertTriangle,
   FileText,
 } from "lucide-react";
+import Analytics from "./Analytics";
 
 interface AnalyticsDashboardProps {
   examData?: {
+    examId?: string;
     totalExams: number;
     completedExams: number;
     pendingExams: number;
@@ -449,6 +451,7 @@ const AnalyticsDashboard = ({
         </TabsContent>
 
         <TabsContent value="ai-confidence" className="space-y-6">
+          <Analytics examId={examData?.examId} />
           <Card>
             <CardHeader>
               <CardTitle>AI Confidence Levels</CardTitle>

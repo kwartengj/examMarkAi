@@ -31,6 +31,28 @@ const ExamSchema = new mongoose.Schema({
       ref: "Question",
     },
   ],
+  markingCriteria: [
+    {
+      description: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+      maxScore: {
+        type: Number,
+        required: true,
+        min: 1,
+      },
+    },
+  ],
+  fileUrl: {
+    type: String,
+    trim: true,
+  },
+  fileName: {
+    type: String,
+    trim: true,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
